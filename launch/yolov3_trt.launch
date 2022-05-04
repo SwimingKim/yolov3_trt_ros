@@ -13,5 +13,9 @@
   </node>
 
   <node name="yolov3_trt" pkg="yolov3_trt" type="onnx_to_tensorrt.py" output="screen" />
+  <node name="trt_driver" pkg="yolov3_trt" type="trt_drive.py" output="screen" />
+
+    <!-- motor node -->
+  <include file="$(find xycar_motor)/launch/xycar_motor.launch" />
 
 </launch>

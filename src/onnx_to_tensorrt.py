@@ -71,10 +71,10 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image as Imageros
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
-CFG = "/home/nvidia/xycar_ws/src/test/src/yolov3-tiny_tstl352.cfg"
-TRT = '/home/nvidia/xycar_ws/src/test/src/yolov3-tiny_tstl352_best_final.trt'
+CFG = "/home/nvidia/xycar_ws/src/yolov3_trt_ros/src/yolov3-tiny_tstl352.cfg"
+TRT = '/home/nvidia/xycar_ws/src/yolov3_trt_ros/src/yolov3-tiny_tstl352_best_final.trt'
 NUM_CLASS = 6
-INPUT_IMG = '/home/nvidia/xycar_ws/src/test/src/video1_2.png'
+INPUT_IMG = '/home/nvidia/xycar_ws/src/yolov3_trt_ros/src/video1_2.png'
 
 bridge = CvBridge()
 xycar_image = np.empty(shape=[0])
@@ -85,7 +85,7 @@ class yolov3_trt(object):
         self.num_class = NUM_CLASS
         width, height, masks, anchors = parse_cfg_wh(self.cfg_file_path)
         self.engine_file_path = TRT
-        self.show_img = False
+        self.show_img = True
 
         # Two-dimensional tuple with the target network's (spatial) input resolution in HW ordered
         input_resolution_yolov3_WH = (width, height)
@@ -167,6 +167,39 @@ class yolov3_trt(object):
                 cv2.imshow("result",show_img)
                 cv2.waitKey(1)
 
+    def _write_message(self, detection_results, boxes, scores, classes):
+        """ populate output message with input header and bounding boxes information """
+        if boxes is None:
+            return None
+        print(boxes)
+        for box, score, category in zip(boxes, scores, classes):
+            # Populate darknet message
+            minx, miny, width, height = box
+            detection_msg = BoundingBox()
+            detection_msg.xmin = int(minx)
+            detection_msg.xmax = int(miny)
+            detection_msg.ymin = int(minx + width)
+            detection_msg.ymax = int(miny + height)
+            detection_msg.probability = score
+            detection_msg.Class = str(category)
+            detection_msg.id = int(category)
+            detection_results.bounding_boxes.append(detection_msg)
+        return detection_results
+
+    def publisher(self, boxes, confs, clss):
+        """ Publishes to detector_msgs
+        Parameters:
+        boxes (List(List(int))) : Bounding boxes of all objects
+        confs (List(double))	: Probability scores of all objects
+        clss  (List(int))	: Class ID of all classes
+        """
+        detection_results = BoundingBoxes()
+        #detection_results.header = rospy.Time.now()
+        #detection_results.header.stamp = rospy.Time.now()
+        self._write_message(detection_results, boxes, confs, clss)
+        self.detection_pub.publish(detection_results)
+
+
 #parse width, height, masks and anchors from cfg file
 def parse_cfg_wh(cfg):
     masks = []
@@ -190,36 +223,6 @@ def parse_cfg_wh(cfg):
 def img_callback(data):
     global xycar_image
     xycar_image = bridge.imgmsg_to_cv2(data, "bgr8")
-
-def _write_message(self, detection_results, boxes, scores, classes):
-    """ populate output message with input header and bounding boxes information """
-    if boxes is None:
-        return None
-    for box, score, category in zip(boxes, scores, classes):
-        # Populate darknet message
-        minx, miny, width, height = box
-        detection_msg = BoundingBox()
-        detection_msg.xmin = minx
-        detection_msg.xmax = miny
-        detection_msg.ymin = minx + width
-        detection_msg.ymax = miny + height
-        detection_msg.probability = score
-        detection_msg.Class = category
-        detection_results.bounding_boxes.append(detection_msg)
-    return detection_results
-
-def publisher(self, boxes, confs, clss):
-    """ Publishes to detector_msgs
-    Parameters:
-    boxes (List(List(int))) : Bounding boxes of all objects
-    confs (List(double))	: Probability scores of all objects
-    clss  (List(int))	: Class ID of all classes
-    """
-    detection_results = BoundingBoxes()
-    detection_results.header = rospy.Time.now()
-    detection_results.header.stamp = rospy.Time.now()
-    self._write_message(detection_results, boxes, confs, clss)
-    self.detection_pub.publish(detection_results)
 
 def draw_bboxes(image_raw, bboxes, confidences, categories, all_categories, bbox_color='blue'):
     """Draw the bounding boxes on the original input image and return it.

@@ -4,6 +4,10 @@ project(yolov3_trt)
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 
+catkin_python_setup()
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/package.xml ${CMAKE_CURRENT_SOURCE_DIR}/package.xml COPYONLY)
+
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -50,10 +54,9 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  Detector2D.msg
-  Detector2DArray.msg
-  BoundingBox2D.msg
-  ObjectHypothesis.msg
+  BoundingBox.msg
+  BoundingBoxes.msg
+  ObjectCount.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -71,10 +74,7 @@ add_message_files(
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs
-# )
+generate_messages( DEPENDENCIES std_msgs )
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -113,7 +113,7 @@ catkin_package(
 )
 
 catkin_package(
-  CATKIN_DEPENDS nodelet rospy cv_bridge message_runtime
+  CATKIN_DEPENDS message_runtime
 )
 
 ###########
@@ -166,10 +166,10 @@ include_directories(
 
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
-# catkin_install_python(PROGRAMS
-#   scripts/my_python_script
-#   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
+#catkin_install_python(PROGRAMS
+#  src/onnx_to_tenssorrt.py
+#  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+#)
 
 ## Mark executables for installation
 ## See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_executables.html

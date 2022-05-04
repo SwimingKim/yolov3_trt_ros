@@ -65,8 +65,7 @@ import time
 
 import rospy
 from std_msgs.msg import String
-from yolov3_trt.msg import Detector2D
-from yolov3_trt.msg import Detector2DArray
+from yolov3_trt.msg import BoundingBox, BoundingBoxes
 import cv2
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image as Imageros
@@ -109,9 +108,10 @@ class yolov3_trt(object):
 
         self.postprocessor = PostprocessYOLO(**postprocessor_args)
         
-        self.detection_pub = rospy.Publisher('/yolov3_trt/detections', Detector2DArray, queue_size=1)
+        self.detection_pub = rospy.Publisher('/yolov3_trt/detections', BoundingBoxes, queue_size=1)
 
     def detect(self):
+        print("detect")
         rate = rospy.Rate(10)
         image_sub = rospy.Subscriber("/usb_cam/image_raw", Imageros, img_callback)
         while not rospy.is_shutdown():
@@ -136,19 +136,26 @@ class yolov3_trt(object):
                 inputs[0].host = image
                 trt_outputs = common.do_inference(context, bindings=bindings, inputs=inputs, outputs=outputs, stream=stream)
 
+            if xycar_image.shape[0] == 0:
+                continue
+
             # Before doing post-processing, we need to reshape the outputs as the common.do_inference will give us flat arrays.
             trt_outputs = [output.reshape(shape) for output, shape in zip(trt_outputs, self.output_shapes)]
 
             # Run the post-processing algorithms on the TensorRT outputs and get the bounding box details of detected objects
             boxes, classes, scores = self.postprocessor.process(trt_outputs, shape_orig_WH)
-            
+
+            if boxes is None:
+                continue
+            #rospy.loginfo("boxes : {}".format(len(boxes)))
+
             latency = time.time() - start_time
             fps = 1 / latency
 
             #publish detected objects boxes and classes
             self.publisher(boxes, scores, classes)
-            
-            print("latency : {}".format(latency))
+            #rospy.loginfo("latency : {}".format(latency))
+            #print("latency : {}".format(latency))
             # Draw the bounding boxes onto the original input image and save it as a PNG file
             # print(boxes, classes, scores)
             if self.show_img:
@@ -184,6 +191,23 @@ def img_callback(data):
     global xycar_image
     xycar_image = bridge.imgmsg_to_cv2(data, "bgr8")
 
+def _write_message(self, detection_results, boxes, scores, classes):
+    """ populate output message with input header and bounding boxes information """
+    if boxes is None:
+        return None
+    for box, score, category in zip(boxes, scores, classes):
+        # Populate darknet message
+        minx, miny, width, height = box
+        detection_msg = BoundingBox()
+        detection_msg.xmin = minx
+        detection_msg.xmax = miny
+        detection_msg.ymin = minx + width
+        detection_msg.ymax = miny + height
+        detection_msg.probability = score
+        detection_msg.Class = category
+        detection_results.bounding_boxes.append(detection_msg)
+    return detection_results
+
 def publisher(self, boxes, confs, clss):
     """ Publishes to detector_msgs
     Parameters:
@@ -191,25 +215,11 @@ def publisher(self, boxes, confs, clss):
     confs (List(double))	: Probability scores of all objects
     clss  (List(int))	: Class ID of all classes
     """
-    detection2d = Detector2DArray()
-    detection = Detector2D()
-    detection2d.header.stamp = rospy.Time.now()
-    
-    for i in range(len(boxes)):
-        # boxes : xmin, ymin, xmax, ymax
-        for _ in boxes:
-            detection.header.stamp = rospy.Time.now()
-            detection.header.frame_id = "camera" # change accordingly
-            detection.results.id = clss[i]
-            detection.results.score = confs[i]
-            detection.bbox.center.x = boxes[i][0] + boxes[i][2]/2
-            detection.bbox.center.y = boxes[i][1] + boxes[i][3]/2
-            detection.bbox.center.theta = 0.0  # change if required
-            detection.bbox.size_x = abs(boxes[i][2])
-            detection.bbox.size_y = abs(boxes[i][3])
-        detection2d.detections.append(detection)
-    
-    self.detection_pub.publish(detection2d)
+    detection_results = BoundingBoxes()
+    detection_results.header = rospy.Time.now()
+    detection_results.header.stamp = rospy.Time.now()
+    self._write_message(detection_results, boxes, confs, clss)
+    self.detection_pub.publish(detection_results)
 
 def draw_bboxes(image_raw, bboxes, confidences, categories, all_categories, bbox_color='blue'):
     """Draw the bounding boxes on the original input image and return it.
@@ -255,5 +265,6 @@ if __name__ == '__main__':
     #args = parse_args()
     yolo = yolov3_trt()
     rospy.init_node('yolov3_trt', anonymous=True)
+    #rospy.loginfo("run yolov3_trt")
     yolo.detect()
 

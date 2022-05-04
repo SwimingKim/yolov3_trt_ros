@@ -12,7 +12,6 @@
     <param name="io_method" value="mmap"/>
   </node>
 
-  <node name="yolov3_trt" pkg="yolov3_trt" type="onnx_to_tensorrt.py" />
-
+  <node name="yolov3_trt" pkg="yolov3_trt" type="onnx_to_tensorrt.py" output="screen" />
 
 </launch>

@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>yolov3_trt</name>
+  <name>yolov3_trt_ros</name>
   <version>0.0.0</version>
-  <description>The yolov3_trt package</description>
+  <description>The yolov3_trt_ros package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->

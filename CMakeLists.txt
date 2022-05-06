@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(yolov3_trt)
+project(yolov3_trt_ros)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -56,7 +56,6 @@ add_message_files(
   FILES
   BoundingBox.msg
   BoundingBoxes.msg
-  ObjectCount.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -167,7 +166,7 @@ include_directories(
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 #catkin_install_python(PROGRAMS
-#  src/onnx_to_tenssorrt.py
+#  src/trt_detection.py
 #  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 #)
 

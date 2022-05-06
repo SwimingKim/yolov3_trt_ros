@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 import rospy, serial, time
 from xycar_msgs.msg import xycar_motor
@@ -58,7 +58,7 @@ def find_u_turn():
 
 
 rospy.init_node('trt_driver')
-rospy.Subscriber('/yolov3_trt/detections', BoundingBoxes, callback, queue_size=1)
+rospy.Subscriber('/yolov3_trt_ros/detections', BoundingBoxes, callback, queue_size=1)
 pub = rospy.Publisher('xycar_motor',xycar_motor,queue_size=1)
 
 rate = rospy.Rate(10)
@@ -70,11 +70,14 @@ while not rospy.is_shutdown():
         drive_right()
     elif obj_id == 2:
         drive_stop()
-    elif obj_id == 5:
-        find_traffic_light()
     elif obj_id == 3:
         find_cross_walk()
     elif obj_id == 4:
         find_u_turn()
+    elif obj_id == 5:
+        find_traffic_light()
+    
+    #reset obj_id
+    obj_id = -1
 
     rate.sleep()

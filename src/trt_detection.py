@@ -48,27 +48,23 @@
 # Users Notice.
 #
 
-from __future__ import print_function
-
+import sys, os
+import time
 import numpy as np
+import cv2
 import tensorrt as trt
 from PIL import Image,ImageDraw
-
-#from yolov3_to_onnx import download_file
-from data_processing import PreprocessYOLO, PostprocessYOLO, ALL_CATEGORIES
-
-import sys, os
-sys.path.insert(1, os.path.join(sys.path[0], ".."))
-import common
-
-import time
-
 import rospy
+
 from std_msgs.msg import String
 from yolov3_trt.msg import BoundingBox, BoundingBoxes
-import cv2
+
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image as Imageros
+
+from data_processing import PreprocessYOLO, PostprocessYOLO, ALL_CATEGORIES
+import common
+
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
 CFG = "/home/nvidia/xycar_ws/src/yolov3_trt_ros/src/yolov3-tiny_tstl352.cfg"
@@ -107,37 +103,38 @@ class yolov3_trt(object):
                               "num_class": self.num_class}
 
         self.postprocessor = PostprocessYOLO(**postprocessor_args)
+
+        self.engine = get_engine(self.engine_file_path)
+
+        self.context = self.engine.create_execution_context()
         
-        self.detection_pub = rospy.Publisher('/yolov3_trt/detections', BoundingBoxes, queue_size=1)
+        self.detection_pub = rospy.Publisher('/yolov3_trt_ros/detections', BoundingBoxes, queue_size=1)
 
     def detect(self):
-        print("detect")
         rate = rospy.Rate(10)
         image_sub = rospy.Subscriber("/usb_cam/image_raw", Imageros, img_callback)
         while not rospy.is_shutdown():
             rate.sleep()
 
             # Do inference with TensorRT
-            trt_outputs = []
-            with get_engine(self.engine_file_path) as engine, engine.create_execution_context() as context:
-                inputs, outputs, bindings, stream = common.allocate_buffers(engine)
-                # Do inference
-                if xycar_image.shape[0] == 0:
-                    continue
-                
-                if self.show_img:
-                    cv2.imshow("show_trt",xycar_image)
-                    cv2.waitKey(1)
-                image = self.preprocessor.process(xycar_image)
-                # Store the shape of the original input image in WH format, we will need it for later
-                shape_orig_WH = (image.shape[3], image.shape[2])
-                # Set host input to the image. The common.do_inference function will copy the input to the GPU before executing.
-                start_time = time.time()
-                inputs[0].host = image
-                trt_outputs = common.do_inference(context, bindings=bindings, inputs=inputs, outputs=outputs, stream=stream)
 
+            inputs, outputs, bindings, stream = common.allocate_buffers(self.engine)
+            
+            # if xycar_image is empty, skip inference
             if xycar_image.shape[0] == 0:
                 continue
+            
+            if self.show_img:
+                cv2.imshow("show_trt",xycar_image)
+                cv2.waitKey(1)
+
+            image = self.preprocessor.process(xycar_image)
+            # Store the shape of the original input image in WH format, we will need it for later
+            shape_orig_WH = (image.shape[3], image.shape[2])
+            # Set host input to the image. The common.do_inference function will copy the input to the GPU before executing.
+            start_time = time.time()
+            inputs[0].host = image
+            trt_outputs = common.do_inference(self.context, bindings=bindings, inputs=inputs, outputs=outputs, stream=stream)
 
             # Before doing post-processing, we need to reshape the outputs as the common.do_inference will give us flat arrays.
             trt_outputs = [output.reshape(shape) for output, shape in zip(trt_outputs, self.output_shapes)]
@@ -145,17 +142,12 @@ class yolov3_trt(object):
             # Run the post-processing algorithms on the TensorRT outputs and get the bounding box details of detected objects
             boxes, classes, scores = self.postprocessor.process(trt_outputs, shape_orig_WH)
 
-            if boxes is None:
-                continue
-            #rospy.loginfo("boxes : {}".format(len(boxes)))
-
             latency = time.time() - start_time
             fps = 1 / latency
 
             #publish detected objects boxes and classes
             self.publisher(boxes, scores, classes)
-            #rospy.loginfo("latency : {}".format(latency))
-            #print("latency : {}".format(latency))
+
             # Draw the bounding boxes onto the original input image and save it as a PNG file
             # print(boxes, classes, scores)
             if self.show_img:
@@ -171,7 +163,6 @@ class yolov3_trt(object):
         """ populate output message with input header and bounding boxes information """
         if boxes is None:
             return None
-        print(boxes)
         for box, score, category in zip(boxes, scores, classes):
             # Populate darknet message
             minx, miny, width, height = box
@@ -181,22 +172,19 @@ class yolov3_trt(object):
             detection_msg.ymin = int(minx + width)
             detection_msg.ymax = int(miny + height)
             detection_msg.probability = score
-            detection_msg.Class = str(category)
             detection_msg.id = int(category)
             detection_results.bounding_boxes.append(detection_msg)
         return detection_results
 
-    def publisher(self, boxes, confs, clss):
+    def publisher(self, boxes, confs, classes):
         """ Publishes to detector_msgs
         Parameters:
         boxes (List(List(int))) : Bounding boxes of all objects
         confs (List(double))	: Probability scores of all objects
-        clss  (List(int))	: Class ID of all classes
+        classes  (List(int))	: Class ID of all classes
         """
         detection_results = BoundingBoxes()
-        #detection_results.header = rospy.Time.now()
-        #detection_results.header.stamp = rospy.Time.now()
-        self._write_message(detection_results, boxes, confs, clss)
+        self._write_message(detection_results, boxes, confs, classes)
         self.detection_pub.publish(detection_results)
 
 
@@ -265,9 +253,7 @@ def get_engine(engine_file_path=""):
         sys.exit(1)
 
 if __name__ == '__main__':
-    #args = parse_args()
     yolo = yolov3_trt()
-    rospy.init_node('yolov3_trt', anonymous=True)
-    #rospy.loginfo("run yolov3_trt")
+    rospy.init_node('yolov3_trt_ros', anonymous=True)
     yolo.detect()
 

@@ -1,6 +1,5 @@
 <launch>
 
-  <!-- usb_cam -->
   <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" output="screen" >
     <param name="video_device" value="/dev/videoCAM" />
     <param name="image_width" value="640" />
@@ -12,7 +11,9 @@
     <param name="io_method" value="mmap"/>
   </node>
 
-  <node name="yolov3_trt_ros" pkg="yolov3_trt_ros" type="trt_detection.py" output="screen" />
+  <node name="yolov3_trt_ros" pkg="yolov3_trt_ros" type="trt_detection.py" output="screen">
+    <param name="debug" value="false" />
+  </node>
   <node name="trt_driver" pkg="yolov3_trt_ros" type="trt_drive.py" output="screen" />
 
     <!-- motor node -->

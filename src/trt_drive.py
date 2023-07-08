@@ -2,7 +2,7 @@
 
 import rospy, serial, time
 from xycar_msgs.msg import xycar_motor
-from yolov3_trt.msg import BoundingBoxes, BoundingBox
+from yolov3_trt_ros.msg import BoundingBoxes, BoundingBox
 
 motor_msg = xycar_motor()
 trt_msg = BoundingBoxes()

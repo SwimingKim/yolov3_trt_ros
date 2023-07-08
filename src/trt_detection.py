@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Copyright 1993-2019 NVIDIA Corporation.  All rights reserved.
 #
@@ -53,13 +53,11 @@ import time
 import numpy as np
 import cv2
 import tensorrt as trt
-from PIL import Image,ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 import rospy
 
 from std_msgs.msg import String
-from yolov3_trt.msg import BoundingBox, BoundingBoxes
-
-from cv_bridge import CvBridge
+from yolov3_trt_ros.msg import BoundingBox, BoundingBoxes
 from sensor_msgs.msg import Image as Imageros
 
 from data_processing import PreprocessYOLO, PostprocessYOLO, ALL_CATEGORIES
@@ -67,21 +65,13 @@ import common
 
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
-CFG = "/home/nvidia/xycar_ws/src/yolov3_trt_ros/src/yolov3-tiny_tstl352.cfg"
-TRT = '/home/nvidia/xycar_ws/src/yolov3_trt_ros/src/yolov3-tiny_tstl352_best_final.trt'
-NUM_CLASS = 6
-INPUT_IMG = '/home/nvidia/xycar_ws/src/yolov3_trt_ros/src/video1_2.png'
-
-bridge = CvBridge()
-xycar_image = np.empty(shape=[0])
-
 class yolov3_trt(object):
     def __init__(self):
         self.cfg_file_path = CFG
         self.num_class = NUM_CLASS
         width, height, masks, anchors = parse_cfg_wh(self.cfg_file_path)
         self.engine_file_path = TRT
-        self.show_img = True
+        self.show_img = rospy.get_param("/yolov3_trt_ros/debug") 
 
         # Two-dimensional tuple with the target network's (spatial) input resolution in HW ordered
         input_resolution_yolov3_WH = (width, height)
@@ -117,7 +107,6 @@ class yolov3_trt(object):
             rate.sleep()
 
             # Do inference with TensorRT
-
             inputs, outputs, bindings, stream = common.allocate_buffers(self.engine)
             
             # if xycar_image is empty, skip inference
@@ -209,8 +198,11 @@ def parse_cfg_wh(cfg):
     return w, h, masks, anchors
 
 def img_callback(data):
-    global xycar_image
-    xycar_image = bridge.imgmsg_to_cv2(data, "bgr8")
+    global xycar_image, xycar_raw_image
+    xycar_raw_image = data
+    src = np.frombuffer(data.data, dtype=np.uint8).reshape(data.height, data.width, -1)
+    raw = cv2.normalize(src, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC3)
+    xycar_image = cv2.cvtColor(raw, cv2.COLOR_BGR2RGB)
 
 def draw_bboxes(image_raw, bboxes, confidences, categories, all_categories, bbox_color='blue'):
     """Draw the bounding boxes on the original input image and return it.
@@ -253,7 +245,15 @@ def get_engine(engine_file_path=""):
         sys.exit(1)
 
 if __name__ == '__main__':
+    folder_path = os.path.dirname(os.path.abspath(__file__))
+    CFG = "%s/../model/yolov3-tiny.cfg" % folder_path
+    TRT = '%s/../model/yolov3-tiny.trt' % folder_path
+    NUM_CLASS = 80
+    font =  ImageFont.truetype(folder_path+'/../data/arial.ttf', size=20)
+
+    xycar_image = np.empty(shape=[0])
+    xycar_raw_image = None
+
     yolo = yolov3_trt()
     rospy.init_node('yolov3_trt_ros', anonymous=True)
     yolo.detect()
-
